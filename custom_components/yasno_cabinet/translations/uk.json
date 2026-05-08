@@ -1,0 +1,100 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Кабінет YASNO",
+        "description": "Підключіть через session cookie.",
+        "data": {
+          "name": "Назва",
+          "cabinet_url": "Базовий URL API",
+          "cookie": "Session cookie",
+          "account_id": "ID особового рахунку (необов'язково)",
+          "scan_interval": "Інтервал оновлення (хв)"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Не вдалося підключитися або розібрати відповідь",
+      "auth": "Помилка авторизації. Cookie/сесія невалідні або логін відхилено.",
+      "missing_auth": "Вкажіть або session cookie."
+    },
+    "abort": {
+      "already_configured": "Цей акаунт уже налаштований."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Опції YASNO",
+        "data": {
+          "scan_interval": "Інтервал оновлення (хв)"
+        }
+      }
+    }
+  },
+  "entity": {
+    "sensor": {
+      "balance": {
+        "name": "До сплати"
+      },
+      "debt": {
+        "name": "Борг"
+      },
+      "consumption": {
+        "name": "Споживання"
+      },
+      "last_payment_amount": {
+        "name": "Сума останнього платежу"
+      },
+      "last_payment_date": {
+        "name": "Дата останнього платежу"
+      },
+      "last_fee_date": {
+        "name": "Дата останнього рахунку"
+      },
+      "tariff_name": {
+        "name": "Тариф"
+      },
+      "tariff_price_day": {
+        "name": "Ціна тарифу (день)"
+      },
+      "tariff_price_night": {
+        "name": "Ціна тарифу (ніч)"
+      },
+      "tariff_price_single": {
+        "name": "Ціна тарифу"
+      },
+      "dso_name": {
+        "name": "Поставщик"
+      },
+      "meter_reading_day": {
+        "name": "Показання лічильника (день)"
+      },
+      "meter_reading_night": {
+        "name": "Показання лічильника (ніч)"
+      },
+      "meter_reading_alltime": {
+        "name": "Показання лічильника (разом)"
+      },
+      "meter_reading_date": {
+        "name": "Дата показання лічильника"
+      }
+    }
+  },
+  "services": {
+    "send_meter_readings": {
+      "name": "Передати показання лічильника",
+      "description": "Передати показання лічильника на сервер Yasno",
+      "fields": {
+        "account_id": {
+          "name": "ID особового рахунку",
+          "description": "ID особового рахунку Yasno"
+        },
+        "readings": {
+          "name": "Показання",
+          "description": "Список показань лічильника з зоною та значенням"
+        }
+      }
+    }
+  }
+}

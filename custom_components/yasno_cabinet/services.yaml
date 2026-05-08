@@ -1,0 +1,18 @@
+send_meter_readings:
+  name: Send meter readings
+  description: Send meter readings to YASNO API
+  fields:
+    account_id:
+      name: Account ID
+      description: The YASNO account ID
+      required: true
+      example: "123456789"
+    readings:
+      name: Readings
+      description: List of meter readings with zone and value
+      required: true
+      example:
+        - zone: "Day"
+          value: 604
+        - zone: "Night"
+          value: 4485

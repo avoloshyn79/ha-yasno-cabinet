@@ -1,0 +1,100 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "YASNO Cabinet",
+        "description": "Connect using session cookie.",
+        "data": {
+          "name": "Name",
+          "cabinet_url": "API base URL",
+          "cookie": "Session cookie",
+          "account_id": "Account ID (optional)",
+          "scan_interval": "Update interval (minutes)"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Cannot connect or parse response",
+      "auth": "Authentication failed. Cookie/session invalid or login was rejected.",
+      "missing_auth": "Set either session cookie."
+    },
+    "abort": {
+      "already_configured": "This account is already configured."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "YASNO options",
+        "data": {
+          "scan_interval": "Update interval (minutes)"
+        }
+      }
+    }
+  },
+  "entity": {
+    "sensor": {
+      "balance": {
+        "name": "Balance"
+      },
+      "debt": {
+        "name": "Debt"
+      },
+      "consumption": {
+        "name": "Consumption"
+      },
+      "last_payment_amount": {
+        "name": "Last payment amount"
+      },
+      "last_payment_date": {
+        "name": "Last payment date"
+      },
+      "last_fee_date": {
+        "name": "Last invoice date"
+      },
+      "tariff_name": {
+        "name": "Tariff"
+      },
+      "tariff_price_day": {
+        "name": "Tariff price (day)"
+      },
+      "tariff_price_night": {
+        "name": "Tariff price (night)"
+      },
+      "tariff_price_single": {
+        "name": "Tariff price"
+      },
+      "dso_name": {
+        "name": "Provider"
+      },
+      "meter_reading_day": {
+        "name": "Meter reading (day)"
+      },
+      "meter_reading_night": {
+        "name": "Meter reading (night)"
+      },
+      "meter_reading_alltime": {
+        "name": "Meter reading (total)"
+      },
+      "meter_reading_date": {
+        "name": "Meter reading date"
+      }
+    }
+  },
+  "services": {
+    "send_meter_readings": {
+      "name": "Send meter readings",
+      "description": "Send meter readings to YASNO API",
+      "fields": {
+        "account_id": {
+          "name": "Account ID",
+          "description": "The YASNO account ID"
+        },
+        "readings": {
+          "name": "Readings",
+          "description": "List of meter readings with zone and value"
+        }
+      }
+    }
+  }
+}
