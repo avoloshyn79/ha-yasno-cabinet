@@ -100,7 +100,7 @@ mode: single
 
 1. Відкрийте **HACS**.
 2. Натисніть на три крапки у верхньому правому куті та виберіть **Custom repositories**.
-3. Додайте посилання на цей репозиторій: `https://github.com/vlavoloshyn/ha-yasno-cabinet`
+3. Додайте посилання на цей репозиторій: `https://github.com/avoloshyn79/ha-yasno-cabinet`
 4. Виберіть тип **Integration**.
 5. Натисніть **Add**.
 6. Знайдіть **YASNO Cabinet** у списку та натисніть **Download**.
