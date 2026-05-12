@@ -18,4 +18,8 @@ SERVICE_UPDATE_DATA = "update_data"
 ATTR_READINGS = "readings"
 ATTR_ACCOUNT_ID = "account_id"
 
+EVENT_DATA_UPDATED = f"{DOMAIN}_data_updated"
+EVENT_READINGS_SUBMITTED = f"{DOMAIN}_readings_submitted"
+EVENT_READINGS_FAILED = f"{DOMAIN}_readings_failed"
+
 PLATFORMS: list[str] = ["sensor"]

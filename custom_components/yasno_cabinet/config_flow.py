@@ -120,13 +120,33 @@ class YasnoOptionsFlow(config_entries.OptionsFlow):
         self, user_input: Mapping[str, Any] | None = None
     ) -> config_entries.ConfigFlowResult:
         """Manage the options."""
+        errors: dict[str, str] = {}
+
         if user_input is not None:
-            return self.async_create_entry(title="", data=dict(user_input))
+            test_data = {
+                CONF_CABINET_URL: self._entry.data[CONF_CABINET_URL],
+                CONF_COOKIE: user_input[CONF_COOKIE],
+                CONF_ACCOUNT_ID: self._entry.data.get(CONF_ACCOUNT_ID),
+            }
+            if await self._async_validate_input(test_data, errors):
+                new_data = {
+                    **self._entry.data,
+                    CONF_COOKIE: user_input[CONF_COOKIE],
+                }
+                self.hass.config_entries.async_update_entry(self._entry, data=new_data)
+                return self.async_create_entry(
+                    title="",
+                    data={CONF_SCAN_INTERVAL: user_input[CONF_SCAN_INTERVAL]},
+                )
 
         return self.async_show_form(
             step_id="init",
             data_schema=vol.Schema(
                 {
+                    vol.Required(
+                        CONF_COOKIE,
+                        default=self._entry.data.get(CONF_COOKIE, ""),
+                    ): str,
                     vol.Required(
                         CONF_SCAN_INTERVAL,
                         default=self._entry.options.get(
@@ -134,7 +154,29 @@ class YasnoOptionsFlow(config_entries.OptionsFlow):
                         ),
                     ): NumberSelector(
                         NumberSelectorConfig(min=5, max=1440, mode="box", step=5)
-                    )
+                    ),
                 }
             ),
+            errors=errors,
         )
+
+    async def _async_validate_input(
+        self, user_input: Mapping[str, Any], errors: dict[str, str]
+    ) -> bool:
+        """Validate by performing a real request."""
+        session = async_get_clientsession(self.hass)
+        client = YasnoApiClient(
+            session=session,
+            cabinet_url=user_input[CONF_CABINET_URL],
+            cookie=user_input.get(CONF_COOKIE),
+            account_id=user_input.get(CONF_ACCOUNT_ID),
+        )
+        try:
+            await client.async_get_data()
+        except YasnoAuthenticationError:
+            errors["base"] = "auth"
+            return False
+        except YasnoApiError:
+            errors["base"] = "cannot_connect"
+            return False
+        return True

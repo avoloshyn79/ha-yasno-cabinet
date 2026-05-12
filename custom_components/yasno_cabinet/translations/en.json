@@ -27,12 +27,21 @@
       "init": {
         "title": "YASNO options",
         "data": {
+          "cookie": "Session cookie",
           "scan_interval": "Update interval (minutes)"
+        },
+        "data_description": {
+          "cookie": "Paste a new session cookie if the previous one has expired"
         }
       }
     }
   },
   "entity": {
+    "button": {
+      "refresh": {
+        "name": "Refresh data"
+      }
+    },
     "sensor": {
       "balance": {
         "name": "Balance"

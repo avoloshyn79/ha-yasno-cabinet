@@ -18,6 +18,7 @@ from .const import (
     CONF_COOKIE,
     CONF_SCAN_INTERVAL,
     DOMAIN,
+    EVENT_DATA_UPDATED,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -47,8 +48,17 @@ class YasnoDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     async def _async_update_data(self) -> dict[str, Any]:
         """Fetch latest data from YASNO."""
         try:
-            return await self.api.async_get_data()
+            data = await self.api.async_get_data()
         except YasnoAuthenticationError as err:
             raise UpdateFailed(f"Authentication error: {err}") from err
         except YasnoApiError as err:
             raise UpdateFailed(str(err)) from err
+
+        self.hass.bus.async_fire(
+            EVENT_DATA_UPDATED,
+            {
+                "balance": data.get("balance"),
+                "debt": data.get("debt"),
+            },
+        )
+        return data

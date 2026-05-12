@@ -27,12 +27,21 @@
       "init": {
         "title": "Опції YASNO",
         "data": {
+          "cookie": "Session cookie",
           "scan_interval": "Інтервал оновлення (хв)"
+        },
+        "data_description": {
+          "cookie": "Вставте новий session cookie якщо попередній протермінувався"
         }
       }
     }
   },
   "entity": {
+    "button": {
+      "refresh": {
+        "name": "Оновити дані"
+      }
+    },
     "sensor": {
       "balance": {
         "name": "До сплати"

@@ -17,6 +17,8 @@ from .const import (
     ATTR_ACCOUNT_ID,
     ATTR_READINGS,
     DOMAIN,
+    EVENT_READINGS_FAILED,
+    EVENT_READINGS_SUBMITTED,
     SERVICE_SEND_METER_READINGS,
     SERVICE_UPDATE_DATA,
 )
@@ -24,7 +26,7 @@ from .coordinator import YasnoDataUpdateCoordinator
 
 _LOGGER = logging.getLogger(__name__)
 
-PLATFORMS: list[Platform] = [Platform.SENSOR]
+PLATFORMS: list[Platform] = [Platform.SENSOR, Platform.BUTTON]
 
 SEND_METER_READINGS_SCHEMA = vol.Schema(
     {
@@ -62,11 +64,19 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         try:
             result = await coordinator.api.async_send_meter_readings(account_id, readings)
             _LOGGER.info(
-                f"Meter readings sent successfully. New balance: {result.get('balance')}"
+                "Meter readings sent successfully. New balance: %s", result.get("balance")
+            )
+            hass.bus.async_fire(
+                EVENT_READINGS_SUBMITTED,
+                {"account_id": account_id, "readings": readings},
             )
             await coordinator.async_refresh()
         except YasnoApiError as err:
-            _LOGGER.error(f"Failed to send meter readings: {err}")
+            _LOGGER.error("Failed to send meter readings: %s", err)
+            hass.bus.async_fire(
+                EVENT_READINGS_FAILED,
+                {"account_id": account_id, "error": str(err)},
+            )
             raise
 
     hass.services.async_register(
