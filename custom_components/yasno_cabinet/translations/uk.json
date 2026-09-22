@@ -3,13 +3,11 @@
     "step": {
       "user": {
         "title": "Кабінет YASNO",
-        "description": "Підключіть через номер телефону та пароль (рекомендовано) або через session cookie.",
+        "description": "Підключіть через session cookie.",
         "data": {
           "name": "Назва",
           "cabinet_url": "Базовий URL API",
-          "phone": "Номер телефону (+380...)",
-          "password": "Пароль",
-          "cookie": "Session cookie (альтернатива логіну/паролю)",
+          "cookie": "Session cookie",
           "account_id": "ID особового рахунку (необов'язково)",
           "scan_interval": "Інтервал оновлення (хв)"
         }
@@ -17,8 +15,8 @@
     },
     "error": {
       "cannot_connect": "Не вдалося підключитися або розібрати відповідь",
-      "auth": "Помилка авторизації. Телефон/пароль або cookie невалідні, або логін відхилено.",
-      "missing_auth": "Вкажіть номер телефону та пароль, або session cookie."
+      "auth": "Помилка авторизації. Cookie/сесія невалідні або логін відхилено.",
+      "missing_auth": "Вкажіть або session cookie."
     },
     "abort": {
       "already_configured": "Цей акаунт уже налаштований."
@@ -29,13 +27,10 @@
       "init": {
         "title": "Опції YASNO",
         "data": {
-          "phone": "Номер телефону (+380...)",
-          "password": "Пароль",
           "cookie": "Session cookie",
           "scan_interval": "Інтервал оновлення (хв)"
         },
         "data_description": {
-          "password": "Залиште порожнім, щоб не змінювати збережений пароль",
           "cookie": "Вставте новий session cookie якщо попередній протермінувався"
         }
       }

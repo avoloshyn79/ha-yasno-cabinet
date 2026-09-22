@@ -4,46 +4,19 @@ from __future__ import annotations
 
 import asyncio
 from collections.abc import Mapping
-import json
+from dataclasses import dataclass
 import logging
 import re
-import secrets
 from typing import Any
+from urllib.parse import parse_qs, urlencode, urljoin, urlparse
 import uuid
 
-from curl_cffi.requests import AsyncSession, RequestsError
+from aiohttp import ClientError, ClientSession, ClientTimeout
 
 _LOGGER = logging.getLogger(__name__)
 
 DEFAULT_API_BASE_URL = "https://app.yasno.ua"
 LOGIN_BASE_URL = "https://login.yasno.ua"
-
-# Azure AD B2C tenant/policy backing the YASNO personal cabinet login.
-# Reverse-engineered from the browser login flow (login.yasno.ua HAR capture).
-B2C_TENANT = "yasnomobileprod.onmicrosoft.com"
-B2C_POLICY = "B2C_1A_signup_signin_web"
-B2C_CLIENT_ID = "0ce1809d-fd6a-40e5-9341-4222d06c00a3"
-B2C_REDIRECT_URI = f"{DEFAULT_API_BASE_URL}/api/user-service/signin-oidc"
-B2C_SCOPE = (
-    "openid profile "
-    "https://yasnomobileprod.onmicrosoft.com/BackendAPI/user_access "
-    "offline_access"
-)
-B2C_AUTHORIZE_URL = (
-    f"{LOGIN_BASE_URL}/{B2C_TENANT}/{B2C_POLICY}/oauth2/v2.0/authorize"
-)
-B2C_SELF_ASSERTED_URL = f"{LOGIN_BASE_URL}/{B2C_TENANT}/{B2C_POLICY}/SelfAsserted"
-B2C_CONFIRMED_URL = (
-    f"{LOGIN_BASE_URL}/{B2C_TENANT}/{B2C_POLICY}/api/SelfAsserted/confirmed"
-)
-
-_LOGIN_USER_AGENT = "HomeAssistant-YASNO/1.0"
-
-_SETTINGS_RE = re.compile(r"var SETTINGS\s*=\s*(\{.*?\});", re.DOTALL)
-_FORM_ACTION_RE = re.compile(r"<form[^>]*action=['\"]([^'\"]+)['\"]")
-_INPUT_TAG_RE = re.compile(r"<input[^>]*>")
-_INPUT_NAME_RE = re.compile(r"name=['\"]([^'\"]+)['\"]")
-_INPUT_VALUE_RE = re.compile(r"value=['\"]([^'\"]*)['\"]")
 
 class YasnoApiError(Exception):
     """Base error for YASNO API."""
@@ -56,209 +29,20 @@ class YasnoApiClient:
 
     def __init__(
         self,
-        session: AsyncSession,
+        session: ClientSession,
         cabinet_url: str,
         cookie: str | None,
         account_id: str | None = None,
-        phone: str | None = None,
-        password: str | None = None,
     ) -> None:
         self._session = session
         self._api_base_url = cabinet_url.rstrip("/") if cabinet_url else DEFAULT_API_BASE_URL
         self._cookie = (cookie or "").strip()
         self._account_id = account_id
-        self._phone = (phone or "").strip()
-        self._password = password or ""
         self._device_id = str(uuid.uuid4())
         self._auth_in_progress = False
 
-    @property
-    def can_login(self) -> bool:
-        """Return whether phone/password credentials are configured."""
-        return bool(self._phone and self._password)
-
-    @property
-    def cookie(self) -> str:
-        """Return the current session cookie string."""
-        return self._cookie
-
-    async def async_login(self) -> None:
-        """Authenticate against the YASNO Azure AD B2C login and obtain a session cookie."""
-        if self._auth_in_progress:
-            raise YasnoAuthenticationError("Login already in progress")
-        if not self._phone or not self._password:
-            raise YasnoAuthenticationError("Phone number and password are required to log in")
-
-        self._auth_in_progress = True
-        try:
-            csrf_token, trans_id = await self._b2c_start_login()
-            await self._b2c_submit_credentials(csrf_token, trans_id)
-            action_url, hidden_fields = await self._b2c_fetch_token_form(csrf_token, trans_id)
-            self._cookie = await self._b2c_exchange_token(action_url, hidden_fields)
-        finally:
-            self._auth_in_progress = False
-
-    async def _b2c_start_login(self) -> tuple[str, str]:
-        """Load the B2C authorize page and extract the csrf token and transaction id."""
-        params = {
-            "client_id": B2C_CLIENT_ID,
-            "redirect_uri": B2C_REDIRECT_URI,
-            "response_type": "token id_token",
-            "scope": B2C_SCOPE,
-            "response_mode": "form_post",
-            "nonce": secrets.token_urlsafe(32),
-            "client_info": "1",
-            "deviceId": self._device_id,
-            "backLink": "",
-            "state": secrets.token_urlsafe(48),
-        }
-        try:
-            response = await self._session.get(
-                B2C_AUTHORIZE_URL,
-                params=params,
-                headers={
-                    "Accept": "text/html,application/xhtml+xml",
-                    "User-Agent": _LOGIN_USER_AGENT,
-                },
-                timeout=30,
-            )
-            page_html = response.text
-        except TimeoutError as err:
-            raise YasnoApiError("Cannot reach YASNO login page (timeout)") from err
-        except RequestsError as err:
-            raise YasnoApiError(f"Cannot reach YASNO login page ({type(err).__name__})") from err
-
-        if response.status_code != 200:
-            raise YasnoAuthenticationError(f"YASNO login page returned HTTP {response.status_code}")
-
-        match = _SETTINGS_RE.search(page_html)
-        if not match:
-            raise YasnoAuthenticationError("Could not locate login session data on YASNO login page")
-        try:
-            settings = json.loads(match.group(1))
-        except ValueError as err:
-            raise YasnoAuthenticationError(f"Could not parse YASNO login session data: {err}") from err
-
-        csrf_token = settings.get("csrf")
-        trans_id = settings.get("transId")
-        if not csrf_token or not trans_id:
-            raise YasnoAuthenticationError("YASNO login page did not provide a csrf token")
-        return csrf_token, trans_id
-
-    async def _b2c_submit_credentials(self, csrf_token: str, trans_id: str) -> None:
-        """Submit phone number and password to the B2C self-asserted endpoint."""
-        payload = {
-            "flowType": "Login",
-            "phoneNumber": self._phone,
-            "executeValidation": "",
-            "deviceId": self._device_id,
-            "messageType": "viber",
-            "verificationCode": "",
-            "password": self._password,
-            "newWebPassword": "",
-            "reenterWebPassword": "",
-            "request_type": "RESPONSE",
-        }
-        headers = {
-            "Accept": "application/json, text/javascript, */*; q=0.01",
-            "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
-            "Origin": LOGIN_BASE_URL,
-            "X-CSRF-TOKEN": csrf_token,
-            "X-Requested-With": "XMLHttpRequest",
-            "User-Agent": _LOGIN_USER_AGENT,
-        }
-        try:
-            url = f"{B2C_SELF_ASSERTED_URL}?tx={trans_id}&p={B2C_POLICY}"
-            response = await self._session.post(
-                url,
-                data=payload,
-                headers=headers,
-                timeout=30,
-            )
-            result = response.json()
-        except TimeoutError as err:
-            raise YasnoApiError("Cannot reach YASNO login endpoint (timeout)") from err
-        except RequestsError as err:
-            raise YasnoApiError(f"Cannot reach YASNO login endpoint ({type(err).__name__})") from err
-        except ValueError as err:
-            raise YasnoAuthenticationError(f"YASNO login returned invalid JSON: {err}") from err
-
-        if response.status_code != 200 or str(result.get("status")) != "200":
-            raise YasnoAuthenticationError(
-                f"YASNO rejected phone/password credentials: {result}"
-            )
-
-    async def _b2c_fetch_token_form(
-        self, csrf_token: str, trans_id: str
-    ) -> tuple[str, dict[str, str]]:
-        """Fetch the auto-submit form containing the OIDC tokens after a successful login."""
-        try:
-            url = f"{B2C_CONFIRMED_URL}?csrf_token={csrf_token}&tx={trans_id}&p={B2C_POLICY}"
-            response = await self._session.get(
-                url,
-                headers={"User-Agent": _LOGIN_USER_AGENT},
-                timeout=30,
-            )
-            confirm_html = response.text
-        except TimeoutError as err:
-            raise YasnoApiError("Cannot reach YASNO login confirmation (timeout)") from err
-        except RequestsError as err:
-            raise YasnoApiError(f"Cannot reach YASNO login confirmation ({type(err).__name__})") from err
-
-        if response.status_code != 200:
-            raise YasnoAuthenticationError(
-                f"YASNO login confirmation returned HTTP {response.status_code}"
-            )
-
-        action_match = _FORM_ACTION_RE.search(confirm_html)
-        if not action_match:
-            raise YasnoAuthenticationError("Could not find token submission form after login")
-
-        hidden_fields: dict[str, str] = {}
-        for tag in _INPUT_TAG_RE.findall(confirm_html):
-            name_match = _INPUT_NAME_RE.search(tag)
-            value_match = _INPUT_VALUE_RE.search(tag)
-            if name_match and value_match:
-                hidden_fields[name_match.group(1)] = value_match.group(1)
-
-        if "access_token" not in hidden_fields or "id_token" not in hidden_fields:
-            raise YasnoAuthenticationError("YASNO login did not return an access token")
-
-        return action_match.group(1), hidden_fields
-
-    async def _b2c_exchange_token(self, action_url: str, hidden_fields: dict[str, str]) -> str:
-        """Post the OIDC tokens to app.yasno.ua and return the resulting session cookie string."""
-        try:
-            response = await self._session.post(
-                action_url,
-                data=hidden_fields,
-                headers={
-                    "Content-Type": "application/x-www-form-urlencoded",
-                    "Origin": LOGIN_BASE_URL,
-                    "Referer": f"{LOGIN_BASE_URL}/",
-                    "User-Agent": _LOGIN_USER_AGENT,
-                },
-                allow_redirects=False,
-                timeout=30,
-            )
-        except TimeoutError as err:
-            raise YasnoApiError("Cannot complete YASNO sign-in (timeout)") from err
-        except RequestsError as err:
-            raise YasnoApiError(f"Cannot complete YASNO sign-in ({type(err).__name__})") from err
-
-        if response.status_code not in (200, 302):
-            raise YasnoAuthenticationError(f"YASNO sign-in exchange failed with HTTP {response.status_code}")
-
-        cookie_pairs = [f"{k}={v}" for k, v in response.cookies.items()]
-        if not cookie_pairs:
-            raise YasnoAuthenticationError("YASNO sign-in did not return a session cookie")
-        return "; ".join(cookie_pairs)
-
     async def async_get_data(self) -> dict[str, Any]:
         """Fetch selected account data from API endpoints."""
-        if not self._cookie and self.can_login:
-            await self.async_login()
-
         accounts_data = await self._api_get("/api/account-service/users/me/accounts")
         if not isinstance(accounts_data, list) or not accounts_data:
             raise YasnoApiError("No accounts found in YASNO profile")
@@ -392,29 +176,26 @@ class YasnoApiClient:
                 url,
                 headers=headers,
                 allow_redirects=False,
-                timeout=30,
+                timeout=ClientTimeout(total=30),
             )
         except TimeoutError as err:
             _LOGGER.error(f"Timeout reaching YASNO API endpoint: {path} (30s)")
             raise YasnoApiError(f"Cannot reach YASNO API endpoint: {path} (timeout)") from err
-        except RequestsError as err:
+        except ClientError as err:
             _LOGGER.error(f"Network error reaching YASNO API endpoint: {path}: {err}")
             raise YasnoApiError(f"Cannot reach YASNO API endpoint: {path} ({type(err).__name__})") from err
 
-        _LOGGER.debug(f"GET {path} returned HTTP {response.status_code}")
-        if response.status_code in (401, 403):
-            if _retry_after_auth and self.can_login:
-                _LOGGER.warning(f"Authentication error (HTTP {response.status_code}) for {path}, re-logging in...")
-                await self.async_login()
-                return await self._api_get(path, _retry_after_auth=False)
+        _LOGGER.debug(f"GET {path} returned HTTP {response.status}")
+        if response.status in (401, 403):
+            _LOGGER.warning(f"Authentication error (HTTP {response.status}) for {path}, attempting re-login...")
             raise YasnoAuthenticationError("Authentication failed. Cookie/session is invalid.")
-        if response.status_code >= 400:
-            error_text = response.text
-            _LOGGER.error(f"YASNO API error HTTP {response.status_code} for {path}: {error_text[:200]}")
-            raise YasnoApiError(f"YASNO API returned HTTP {response.status_code} for {path}")
+        if response.status >= 400:
+            error_text = await response.text()
+            _LOGGER.error(f"YASNO API error HTTP {response.status} for {path}: {error_text[:200]}")
+            raise YasnoApiError(f"YASNO API returned HTTP {response.status} for {path}")
 
         try:
-            return response.json()
+            return await response.json(content_type=None)
         except ValueError as err:
             _LOGGER.error(f"Invalid JSON response for {path}: {err}")
             raise YasnoApiError(f"YASNO API returned invalid JSON for {path}") from err
@@ -442,29 +223,26 @@ class YasnoApiClient:
                 json=payload,
                 headers=headers,
                 allow_redirects=False,
-                timeout=30,
+                timeout=ClientTimeout(total=30),
             )
         except TimeoutError as err:
             _LOGGER.error(f"Timeout reaching YASNO API endpoint: {path} (30s)")
             raise YasnoApiError(f"Cannot reach YASNO API endpoint: {path} (timeout)") from err
-        except RequestsError as err:
+        except ClientError as err:
             _LOGGER.error(f"Network error reaching YASNO API endpoint: {path}: {err}")
             raise YasnoApiError(f"Cannot reach YASNO API endpoint: {path} ({type(err).__name__})") from err
 
-        _LOGGER.debug(f"POST {path} returned HTTP {response.status_code}")
-        if response.status_code in (401, 403):
-            if _retry_after_auth and self.can_login:
-                _LOGGER.warning(f"Authentication error (HTTP {response.status_code}) for {path}, re-logging in...")
-                await self.async_login()
-                return await self._api_post(path, payload, _retry_after_auth=False)
+        _LOGGER.debug(f"POST {path} returned HTTP {response.status}")
+        if response.status in (401, 403):
+            _LOGGER.warning(f"Authentication error (HTTP {response.status}) for {path}, attempting re-login...")
             raise YasnoAuthenticationError("Authentication failed. Cookie/session is invalid.")
-        if response.status_code >= 400:
-            error_text = response.text
-            _LOGGER.error(f"YASNO API error HTTP {response.status_code} for {path}: {error_text[:200]}")
-            raise YasnoApiError(f"YASNO API returned HTTP {response.status_code} for {path}")
+        if response.status >= 400:
+            error_text = await response.text()
+            _LOGGER.error(f"YASNO API error HTTP {response.status} for {path}: {error_text[:200]}")
+            raise YasnoApiError(f"YASNO API returned HTTP {response.status} for {path}")
 
         try:
-            return response.json()
+            return await response.json(content_type=None)
         except ValueError as err:
             _LOGGER.error(f"Invalid JSON response for {path}: {err}")
             raise YasnoApiError(f"YASNO API returned invalid JSON for {path}") from err
@@ -534,4 +312,10 @@ class YasnoApiClient:
                 return float(normalized)
             except ValueError:
                 return None
+        return None
+
+    def _first(self, values: list[str] | None) -> str | None:
+        """Return first value from a list."""
+        if values:
+            return values[0]
         return None

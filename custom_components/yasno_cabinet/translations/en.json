@@ -3,13 +3,11 @@
     "step": {
       "user": {
         "title": "YASNO Cabinet",
-        "description": "Connect using your phone number and password (recommended) or a session cookie.",
+        "description": "Connect using session cookie.",
         "data": {
           "name": "Name",
           "cabinet_url": "API base URL",
-          "phone": "Phone number (+380...)",
-          "password": "Password",
-          "cookie": "Session cookie (alternative to phone/password)",
+          "cookie": "Session cookie",
           "account_id": "Account ID (optional)",
           "scan_interval": "Update interval (minutes)"
         }
@@ -17,8 +15,8 @@
     },
     "error": {
       "cannot_connect": "Cannot connect or parse response",
-      "auth": "Authentication failed. Phone/password or cookie invalid, or login was rejected.",
-      "missing_auth": "Set either phone number and password, or a session cookie."
+      "auth": "Authentication failed. Cookie/session invalid or login was rejected.",
+      "missing_auth": "Set either session cookie."
     },
     "abort": {
       "already_configured": "This account is already configured."
@@ -29,13 +27,10 @@
       "init": {
         "title": "YASNO options",
         "data": {
-          "phone": "Phone number (+380...)",
-          "password": "Password",
           "cookie": "Session cookie",
           "scan_interval": "Update interval (minutes)"
         },
         "data_description": {
-          "password": "Leave blank to keep the stored password unchanged",
           "cookie": "Paste a new session cookie if the previous one has expired"
         }
       }
