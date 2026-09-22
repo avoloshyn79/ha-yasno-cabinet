@@ -7,10 +7,11 @@ from typing import Any
 
 import voluptuous as vol
 
+from curl_cffi.requests import AsyncSession
+
 from homeassistant import config_entries
 from homeassistant.const import CONF_NAME
 from homeassistant.core import callback
-from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.selector import NumberSelector, NumberSelectorConfig
 
 from .api import YasnoApiClient, YasnoApiError, YasnoAuthenticationError
@@ -92,16 +93,16 @@ class YasnoConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             errors["base"] = "missing_auth"
             return False
 
-        session = async_get_clientsession(self.hass)
-        client = YasnoApiClient(
-            session=session,
-            cabinet_url=user_input[CONF_CABINET_URL],
-            cookie=user_input.get(CONF_COOKIE),
-            account_id=user_input.get(CONF_ACCOUNT_ID),
-            phone=user_input.get(CONF_PHONE),
-            password=user_input.get(CONF_PASSWORD),
-        )
+        session = AsyncSession(impersonate="chrome")
         try:
+            client = YasnoApiClient(
+                session=session,
+                cabinet_url=user_input[CONF_CABINET_URL],
+                cookie=user_input.get(CONF_COOKIE),
+                account_id=user_input.get(CONF_ACCOUNT_ID),
+                phone=user_input.get(CONF_PHONE),
+                password=user_input.get(CONF_PASSWORD),
+            )
             await client.async_get_data()
         except YasnoAuthenticationError:
             errors["base"] = "auth"
@@ -109,6 +110,9 @@ class YasnoConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         except YasnoApiError:
             errors["base"] = "cannot_connect"
             return False
+        finally:
+            await session.close()
+
         return True
 
     @staticmethod
@@ -193,16 +197,16 @@ class YasnoOptionsFlow(config_entries.OptionsFlow):
         self, user_input: Mapping[str, Any], errors: dict[str, str]
     ) -> bool:
         """Validate by performing a real request."""
-        session = async_get_clientsession(self.hass)
-        client = YasnoApiClient(
-            session=session,
-            cabinet_url=user_input[CONF_CABINET_URL],
-            cookie=user_input.get(CONF_COOKIE),
-            account_id=user_input.get(CONF_ACCOUNT_ID),
-            phone=user_input.get(CONF_PHONE),
-            password=user_input.get(CONF_PASSWORD),
-        )
+        session = AsyncSession(impersonate="chrome")
         try:
+            client = YasnoApiClient(
+                session=session,
+                cabinet_url=user_input[CONF_CABINET_URL],
+                cookie=user_input.get(CONF_COOKIE),
+                account_id=user_input.get(CONF_ACCOUNT_ID),
+                phone=user_input.get(CONF_PHONE),
+                password=user_input.get(CONF_PASSWORD),
+            )
             await client.async_get_data()
         except YasnoAuthenticationError:
             errors["base"] = "auth"
@@ -210,4 +214,7 @@ class YasnoOptionsFlow(config_entries.OptionsFlow):
         except YasnoApiError:
             errors["base"] = "cannot_connect"
             return False
+        finally:
+            await session.close()
+
         return True

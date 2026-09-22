@@ -6,9 +6,10 @@ from datetime import timedelta
 import logging
 from typing import Any
 
+from curl_cffi.requests import AsyncSession
+
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
 from .api import YasnoApiClient, YasnoApiError, YasnoAuthenticationError
@@ -32,9 +33,9 @@ class YasnoDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     def __init__(self, hass: HomeAssistant, entry: ConfigEntry) -> None:
         """Initialize coordinator."""
         self.entry = entry
-        session = async_get_clientsession(hass)
+        self._session = AsyncSession(impersonate="chrome")
         self.api = YasnoApiClient(
-            session=session,
+            session=self._session,
             cabinet_url=entry.data[CONF_CABINET_URL],
             cookie=entry.data.get(CONF_COOKIE),
             account_id=entry.data.get(CONF_ACCOUNT_ID),
@@ -66,3 +67,8 @@ class YasnoDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             },
         )
         return data
+
+    async def async_shutdown(self) -> None:
+        """Close the curl_cffi session on unload."""
+        await super().async_shutdown()
+        await self._session.close()

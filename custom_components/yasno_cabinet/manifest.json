@@ -4,8 +4,8 @@
   "config_flow": true,
   "documentation": "https://yasno.ua/my",
   "iot_class": "cloud_polling",
-  "requirements": [],
   "version": "0.5.0",
   "issue_tracker": "https://github.com/avoloshyn79/ha-yasno-cabinet/issues",
-  "codeowners": ["@avoloshyn79"]
+  "codeowners": ["@avoloshyn79"],
+  "requirements": ["curl_cffi==0.7.4"]
 }
