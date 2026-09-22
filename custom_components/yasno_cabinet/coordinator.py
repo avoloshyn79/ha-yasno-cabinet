@@ -16,6 +16,8 @@ from .const import (
     CONF_ACCOUNT_ID,
     CONF_CABINET_URL,
     CONF_COOKIE,
+    CONF_PASSWORD,
+    CONF_PHONE,
     CONF_SCAN_INTERVAL,
     DOMAIN,
     EVENT_DATA_UPDATED,
@@ -36,6 +38,8 @@ class YasnoDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             cabinet_url=entry.data[CONF_CABINET_URL],
             cookie=entry.data.get(CONF_COOKIE),
             account_id=entry.data.get(CONF_ACCOUNT_ID),
+            phone=entry.data.get(CONF_PHONE),
+            password=entry.data.get(CONF_PASSWORD),
         )
 
         super().__init__(

@@ -18,6 +18,8 @@ from .const import (
     CONF_ACCOUNT_ID,
     CONF_CABINET_URL,
     CONF_COOKIE,
+    CONF_PASSWORD,
+    CONF_PHONE,
     CONF_SCAN_INTERVAL,
     DEFAULT_CABINET_URL,
     DEFAULT_NAME,
@@ -39,7 +41,9 @@ class YasnoConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
         if user_input is not None:
             await self.async_set_unique_id(
-                user_input.get(CONF_ACCOUNT_ID) or user_input[CONF_CABINET_URL]
+                user_input.get(CONF_ACCOUNT_ID)
+                or user_input.get(CONF_PHONE)
+                or user_input[CONF_CABINET_URL]
             )
             self._abort_if_unique_id_configured()
 
@@ -50,6 +54,8 @@ class YasnoConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     CONF_CABINET_URL: user_input[CONF_CABINET_URL],
                     CONF_COOKIE: user_input.get(CONF_COOKIE),
                     CONF_ACCOUNT_ID: user_input.get(CONF_ACCOUNT_ID),
+                    CONF_PHONE: user_input.get(CONF_PHONE),
+                    CONF_PASSWORD: user_input.get(CONF_PASSWORD),
                 }
                 options = {CONF_SCAN_INTERVAL: user_input[CONF_SCAN_INTERVAL]}
                 return self.async_create_entry(
@@ -62,6 +68,8 @@ class YasnoConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 {
                     vol.Required(CONF_NAME, default=DEFAULT_NAME): str,
                     vol.Required(CONF_CABINET_URL, default=DEFAULT_CABINET_URL): str,
+                    vol.Optional(CONF_PHONE): str,
+                    vol.Optional(CONF_PASSWORD): str,
                     vol.Optional(CONF_COOKIE): str,
                     vol.Optional(CONF_ACCOUNT_ID): str,
                     vol.Required(
@@ -78,8 +86,9 @@ class YasnoConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         self, user_input: Mapping[str, Any], errors: dict[str, str]
     ) -> bool:
         """Validate by performing a real request."""
+        has_phone_auth = bool(user_input.get(CONF_PHONE)) and bool(user_input.get(CONF_PASSWORD))
         has_cookie = bool(user_input.get(CONF_COOKIE))
-        if not has_cookie:
+        if not has_phone_auth and not has_cookie:
             errors["base"] = "missing_auth"
             return False
 
@@ -89,6 +98,8 @@ class YasnoConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             cabinet_url=user_input[CONF_CABINET_URL],
             cookie=user_input.get(CONF_COOKIE),
             account_id=user_input.get(CONF_ACCOUNT_ID),
+            phone=user_input.get(CONF_PHONE),
+            password=user_input.get(CONF_PASSWORD),
         )
         try:
             await client.async_get_data()
@@ -123,15 +134,28 @@ class YasnoOptionsFlow(config_entries.OptionsFlow):
         errors: dict[str, str] = {}
 
         if user_input is not None:
+            # An empty password/cookie in the form means "keep the existing one" —
+            # we never pre-fill secrets back into the form for editing.
+            phone = user_input.get(CONF_PHONE) or self._entry.data.get(CONF_PHONE)
+            password = user_input.get(CONF_PASSWORD) or self._entry.data.get(CONF_PASSWORD)
+            cookie = user_input.get(CONF_COOKIE) or self._entry.data.get(CONF_COOKIE)
             test_data = {
                 CONF_CABINET_URL: self._entry.data[CONF_CABINET_URL],
-                CONF_COOKIE: user_input[CONF_COOKIE],
+                CONF_COOKIE: cookie,
                 CONF_ACCOUNT_ID: self._entry.data.get(CONF_ACCOUNT_ID),
+                CONF_PHONE: phone,
+                CONF_PASSWORD: password,
             }
-            if await self._async_validate_input(test_data, errors):
+            has_phone_auth = bool(phone) and bool(password)
+            has_cookie = bool(cookie)
+            if not has_phone_auth and not has_cookie:
+                errors["base"] = "missing_auth"
+            elif await self._async_validate_input(test_data, errors):
                 new_data = {
                     **self._entry.data,
-                    CONF_COOKIE: user_input[CONF_COOKIE],
+                    CONF_COOKIE: cookie,
+                    CONF_PHONE: phone,
+                    CONF_PASSWORD: password,
                 }
                 self.hass.config_entries.async_update_entry(self._entry, data=new_data)
                 return self.async_create_entry(
@@ -143,7 +167,12 @@ class YasnoOptionsFlow(config_entries.OptionsFlow):
             step_id="init",
             data_schema=vol.Schema(
                 {
-                    vol.Required(
+                    vol.Optional(
+                        CONF_PHONE,
+                        default=self._entry.data.get(CONF_PHONE, ""),
+                    ): str,
+                    vol.Optional(CONF_PASSWORD): str,
+                    vol.Optional(
                         CONF_COOKIE,
                         default=self._entry.data.get(CONF_COOKIE, ""),
                     ): str,
@@ -170,6 +199,8 @@ class YasnoOptionsFlow(config_entries.OptionsFlow):
             cabinet_url=user_input[CONF_CABINET_URL],
             cookie=user_input.get(CONF_COOKIE),
             account_id=user_input.get(CONF_ACCOUNT_ID),
+            phone=user_input.get(CONF_PHONE),
+            password=user_input.get(CONF_PASSWORD),
         )
         try:
             await client.async_get_data()

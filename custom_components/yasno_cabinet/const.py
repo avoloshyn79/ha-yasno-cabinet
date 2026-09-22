@@ -8,6 +8,8 @@ CONF_CABINET_URL = "cabinet_url"
 CONF_COOKIE = "cookie"
 CONF_ACCOUNT_ID = "account_id"
 CONF_SCAN_INTERVAL = "scan_interval"
+CONF_PHONE = "phone"
+CONF_PASSWORD = "password"
 
 DEFAULT_NAME = "YASNO Cabinet"
 DEFAULT_CABINET_URL = "https://app.yasno.ua"

@@ -1,3 +1,6 @@
+# HAR captures (may contain plaintext credentials/tokens)
+*.har
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
